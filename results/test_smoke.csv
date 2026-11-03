@@ -1,0 +1,6 @@
+image_id,file_name,clip,frame,width,height
+clip_001_0000001,test/images/clip_001/0000001.jpg,clip_001,1,1920,1080
+clip_001_0000002,test/images/clip_001/0000002.jpg,clip_001,2,1920,1080
+clip_001_0000003,test/images/clip_001/0000003.jpg,clip_001,3,1920,1080
+clip_001_0000004,test/images/clip_001/0000004.jpg,clip_001,4,1920,1080
+clip_001_0000005,test/images/clip_001/0000005.jpg,clip_001,5,1920,1080

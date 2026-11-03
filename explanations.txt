@@ -1,0 +1,670 @@
+Overview
+This is a Computer Vision homework assignment for the UCU AI 2026 class. Your task is to develop a deep learning model capable of accurately identifying objects across the video.
+
+Start
+
+11 days ago
+Close
+
+8 days to go
+Description
+Submission Information
+Submission requirements. The final selected submission must be accompanied by a technical report describing your methodology, motivation, and design reasoning. Both the report and the complete reproducible code must be submitted through the LMS.
+
+Grading. Your final grade will depend on performance on the private leaderboard, as well as the quality of your report and implementation. Check the Grading section below!
+
+What to submit. Prepare two separate deliverables: your code, organized in one or more Jupyter notebooks or scripts, and a report that summarizes the experiments. A notebook with outputs alone does not replace the report. Use the github repository template for both your report and code. Usage of other templates may result in points deduction. More details on the submission format are in the respective section.
+
+One-on-one discussion. We will also hold a one-on-one discussion where you walk us through your approach, report, and code. Be ready to explain your preprocessing, validation strategy, model choices, and final predictions.
+
+Independent work. Code sharing between participants is strictly prohibited and will result in a zero grade for this assignment.
+
+Recommendations
+Note that this homework requires more time and dedication from you. This is not a task you can complete properly in a single day. Therefore, we encourage you to start early. Additionally, please refer to the Practical Tips Section for more information, tips, and materials on setting up a proper training pipeline.
+
+Start with a complete, simple pipeline that produces a valid submission. Keep a record of your experiments as you go, including approaches that did not improve the score.
+
+Teams
+Note that you can (and we encourage to) do this task in a team of two. However, everyone will have an individual defense regardless of a team size. You are expected to know every part of your team’s work.
+
+Compute
+Note that the Google Colab free tier offers a Tesla T4 or L4 GPU with up to 12-16 GB of VRAM, usually available for around 12 hours per session before automatic disconnection.
+In addition, Kaggle provides up to 30 hours of free GPU usage per week, which gives you approximately 60 hours of GPU time over two weeks for this homework.
+Make sure to use GPUs only when you are ready to train or fine-tune your models to avoid wasting GPU time on debugging or data preprocessing.
+Tasks such as data loading, batch preparation, exploratory data analysis (EDA), and visualization can be performed efficiently on CPUs before switching to GPU training.
+AI usage
+You are free to use AI tools for code writing. However, we DO NOT tolerate AI written reports. Each report will be checked for AI watermarks. We want to see your conclusions, not AI’s!
+
+Submission format
+Submit your homework using the provided template. The repository contains instructions for using and filling it in.
+
+Both members must be added as collaborators on the GitHub repository, and both must have made meaningful commits. Otherwise, authorship of the work may be questioned.
+
+Write your report in the format described in the repository (instructions and template included), and publish it via GitHub Pages.
+
+Share a repository that follows the template. Both teammates must submit the repository link to the LMS. Your repository must be public and accessible for grading before the deadline. If it is not public at any point after the deadline, your work will not be checked.
+
+Late policy
+Late work is graded according to the course syllabus. A submission that is late by anything from a few seconds up to one week will have its grade reduced by 50%.
+
+A submission counts as late if either of these happens after the deadline:
+
+the repository link is submitted to the LMS late, or
+commits are pushed to the repository.
+Make sure that all changes are committed before the deadline. No exceptions will be made, be that late commit an important script or a small typo fix.
+
+Any attempt to manipulate commit history (for example, with backdated commits) will result in your grade being cancelled entirely.
+
+Grading (10pts – total + up to 5pts bonus)
+Private Leaderboard (2pts)
+The final private leaderboard standings contribute 20% to the final grade. Make sure you stay competitive until the very end. Ensure you choose your two best solutions based on your internal evaluation, not only the public score. The score-to-points allocation will be announced before the competition opens. The final scores will be normalized (0.5-2.0) based on the final private LB standings.
+
+However, if your submission doesn’t beat a baseline — the grade for the homework will get canceled.
+
+Code (6pts)
+The following checkpoints are required. Points reward a correct implementation, meaningful experiments, and supported conclusions; a method does not have to beat the previous one to receive credit.
+
+You don’t necessarily get a full grade if you have a correct code implementation. Final grade will be decided during a one-on-one discussion. You may lose points despite satisfying all given requirements.
+
+Use proper cross-validation and out-of-fold evaluation throughout the model experiments. Fit learned preprocessing only on the training portion of each fold. Keep the data splits and evaluation metric consistent across benchmarks, and show incremental changes so it is clear what each experiment adds. Explain any changes to the training sample, features, or evaluation procedure.
+
+For the required model comparisons, start with the same basic features and apply the preprocessing each model needs, including imputation and encoding where appropriate. Compare initial and tuned versions on those features. Explore deliberate feature changes in the Your Pipeline section afterward.
+
+Checkpoint	Points	What we expect to see
+Data Understanding and Preprocessing	1.00	Focused exploration of the dataset and observations that inform later experiments (e.g. class balance, object sizes, scene density). Sound preprocessing choices.
+Two-stage Anchor-based	1.00	A two-stage detector trained under a fixed protocol, evaluated with standard metrics, and accompanied by an analysis of failure cases.
+One-stage Anchor-based	1.00	A one-stage anchor-based detector, model tweaks, and a comparison with the two-stage model.
+One-stage Anchor-free	1.00	An anchor-free detector, model tweaks, and a comparison with the anchor-based models.
+Query-based	0.75	A query-based detector trained under a comparable budget, with an analysis of its behavior relative to previous detectors.
+Your pipeline	1.25	A final pipeline justified by earlier results, reproducible code, and a summary comparison of all models.
+Total for code	6.00	
+(1.00 pt) Data Understanding and Preprocessing
+Explore the dataset before training any model. At minimum, examine the class distribution, the distribution of object sizes, and the number of objects per frame, and describe how these vary across sequences. State which observations inform your later choices, such as input resolution, anchor configuration, or augmentation.
+
+Convert the annotations to the format your framework expects, and describe how ignored regions and non-target classes are handled. Verify the conversion by visualizing ground-truth boxes on sample frames. Split the training and validation data by sequence, not by frame: frames from the same video are highly correlated, so a frame-level split leaks information. If you subsample frames, justify the step size. Describe the resizing, normalization, and augmentation you apply, and keep them reproducible.
+
+The next four grading rubrics involve experimentation with different types of detectors. You are expected to include at least two experiments beyond the baseline, involving hyperparameter tuning and loss modification.
+
+(1.00 pt) Two-stage Anchor-based
+Train a two-stage detector, such as Faster R-CNN or Cascade R-CNN, starting from pretrained weights. You may use an existing implementation (e.g., torchvision, MMDetection, Ultralytics, Hugging Face). Document the training setup.
+
+Investigate at least two training parameters relevant to two-stage detection, such as the number of RPN proposals, the RoI sampling ratio, the box regression loss, or the learning rate schedule.
+
+Report mAP, AP50, AP_small, and inference speed on the validation set. Explain what the region proposal stage and the second stage each contribute, and analyze at least three failure cases with plausible causes.
+
+(1.00 pt) One-stage Anchor-based
+Train a one-stage anchor-based detector, such as RetinaNet or SSD, under the same protocol. Tune relevant parameters, such as anchor scales and aspect ratios, focal loss parameters, or the IoU thresholds for positive and negative assignment. Ground the anchor configuration in the object sizes observed in your data analysis.
+
+Discuss whether removing the proposal stage can cause any issues. If so, explain how they can be addressed. Compare the initial and tuned models with the tuned two-stage detector.
+
+(1.00 pt) One-stage Anchor-free
+Train an anchor-free detector, such as FCOS, CenterNet, or a recent YOLO, under the same protocol. Tune at least two relevant parameters, such as the box regression loss, the label assignment strategy, the input resolution, or an additional high-resolution detection head.
+
+Explain how locations are assigned to objects without anchors, and how this affects small and densely packed objects. Report the search range, the selected settings, and validation results. Compare the initial and tuned models with the tuned anchor-based detectors, with results broken down by object size.
+
+(0.75pts) Query-based
+Train a query-based detector, such as RT-DETR or Deformable DETR, under the same compute budget. Tune relevant parameters, such as the number of queries relative to scene density, the matching cost weights, auxiliary or denoising losses, or separate learning rates for the backbone and transformer.
+
+Explain how bipartite matching removes the need for NMS and how this changes training dynamics. Plot validation mAP over training against a CNN-based detector given the same budget, and discuss performance on small objects and dense scenes. If the model has not converged within the budget, state this and explain what you observe.
+
+(1.25pts) Your Pipeline
+Push your pipeline further and aim for your best leaderboard score. Build on the required model comparisons through data and inference strategies and additional modeling experiments, using consistent validation to identify improvements that generalize. Both parts below are required and graded separately. You may combine them in your final solution, but include intermediate comparisons that distinguish the effect of changing the data or inference strategy from the effect of changing the model.
+
+Report (2pts)
+A descriptive report outlining the complete roadmap of your solution. Include the experiments you tried, including unsuccessful ones, as they will also be graded and can positively influence your final score. For each reported experiment, include the metrics supporting your internal evaluation and, where available, its public leaderboard score.
+
+Report component	Points	What we expect to see
+Methodology and motivation	0.75	Data preparation, validation design, models, tuning strategy, and reasons for the main choices.
+Results and analysis	0.75	Consistent benchmarks, incremental improvements, feature experiments, unsuccessful attempts, and conclusions supported by results.
+Final model and run instructions	0.5	Identify the selected model or ensemble and explain how to run the submitted code to train it and generate the submitted predictions, including dependencies, settings, and seeds.
+Total for report	2.00	
+Make sure to keep your report compact and to-the-point. Work that we will deem as unnecessarily verbose will receive a respective grade reduction for the report. We recommend sticking to a limit of around 1500 words. Exceeding this limit may result in a grade reduction.
+
+The report should summarize the experiments leading to the final solution; it should not be a collection of unfiltered logs. Make it easy to connect each reported result to the corresponding code. You may keep multiple clearly named notebooks for different experiments and choose your own presentation format.
+
+Some points will be deducted for long unfiltered printouts, runtime errors, or unstructured and unclean code. Make sure your notebooks are clearly organized and do not place all the code in a single cell. Add brief comments explaining what each section does. This will make the evaluation process easier and faster.
+
+Bonus Tasks (up to 5 pts)
+Note that each bonus task will require an additional one-on-one discussion.
+
+(1 pt) Data Temporality
+Exploit the temporal structure of the data. Use predictions from previous frames to improve predictions on the current one. Examples include propagating confident detections to the next frame and rescoring matching candidates, linking detections across frames with a simple tracker and smoothing their scores, or compensating for camera motion (e.g., optical flow or homography) before matching. Feature-level temporal aggregation is also accepted.
+
+(1 pt) Visualization
+Visualize what your models learn and where they fail. Explore some of the following approaches:
+
+Feature embeddings. Extract per-object features (e.g., RoI features or decoder query embeddings) and project them to 2D (e.g., t-SNE, UMAP). Color the points by class, object size, or whether the detection was correct, and look for confusable classes or clusters of failures.
+Attention. Explore and visualize the attention maps of a transformer-based model and analyze how attention is distributed over the image. Examples include decoder cross-attention for individual queries, how attention differs across decoder layers, and how it relates to object size and density.
+Grad-CAM. Apply Grad-CAM to different feature maps of a CNN detector (e.g., backbone stages, FPN levels), targeting individual detections. Show what insights you can extract from the results and how you interpret the visualizations. For example, check whether small objects are explained by high-resolution levels, or compare correct and failed detections.
+You must log your training runs and visualizations to Weights & Biases. At minimum, include training curves, xconfigurations, and validation predictions with bounding boxes for each required model. Share a link to a W&B project or report that is accessible to the graders.
+
+For all of the methods, let your creativity guide the process. Interpretation counts more than the number of plots: each visualization should come with what it shows and what you conclude from it.
+
+(up to 3 pts) Custom Architectural Decisions
+Experimentally or analytically, conclude how the baseline model can be changed to perform better on this specific task.
+
+Each architectural decision must have enough supporting evidence. If you remove some blocks or layers, you must show experimentally performance improvements, as well as discuss the results.
+
+To get a full-grade, you must provide a full experimental log, in-depth analysis of each experiment and its failure cases, and detailed explanation of your final solution.
+
+Practical Tips
+Reading materials
+
+The resources below can help you build a strong solution and prepare for the defense. You don't need to read all of them, and you're welcome to go beyond this list. Either way, cite every source you take ideas or code from.
+
+General background
+
+Object Detection in 20 Years: A Survey (https://arxiv.org/abs/1905.05055) This survey offers a broad overview of how detection evolved from hand-crafted features to modern deep detectors. Read it first to see where each model family in this assignment fits.
+
+Towards Large-Scale Small Object Detection: Survey and Benchmarks (https://arxiv.org/abs/2207.14096) This survey reviews why small objects are hard and which techniques help. This is relevant for the homework, since many targets in the VisDrone dataset occupy only a few pixels.
+
+Speed/accuracy trade-offs for modern convolutional object detectors (https://arxiv.org/abs/1611.10012) This work compares detector families under controlled settings. This will serve as a good model for how to set up fair comparisons and report inference speed.
+
+Lilian Weng's "Object Detection for Dummies" series (https://lilianweng.github.io/) This is a walkthrough of object detection, from R-CNN to YOLO, SSD and RetinaNet. This resource will be useful for building intuition before reading the original papers.
+
+Dive into Deep Learning, Computer Vision chapter (https://d2l.ai/chapter_computer-vision/index.html) This explains anchor boxes, IoU, NMS and multiscale detection with runnable code. Helpful if you want to understand these components by implementing them.
+
+Karpathy, "A Recipe for Training Neural Networks" (https://karpathy.github.io/2019/04/25/recipe/) Here you can find practical advice on debugging and iterating on training pipelines. Follow it to avoid wasting GPU hours on silent bugs.
+
+VisDrone (https://arxiv.org/abs/2001.06303) This describes how the data was collected and annotated, including ignored regions. Read this before writing your conversion code.
+
+Data augmentation and training
+
+Albumentations docs (https://albumentations.ai/docs/) and paper (https://arxiv.org/abs/1809.06839) This is a fast augmentation library that transforms bounding boxes together with images. The easiest way to add reproducible augmentation to a custom dataloader.
+
+Bag of Freebies for Training Object Detectors (https://arxiv.org/abs/1902.04103) This write-up many training tricks (mixup, label smoothing, cosine schedules) that improve detectors at no inference cost. You can use this as inspiration for additional experiments on top of your selected baselines.
+
+YOLOv4 (https://arxiv.org/abs/2004.10934) Introduces Mosaic augmentation and systematically tests many training tricks. Useful both as a catalogue of ideas and as an example of ablation-driven design.
+
+Simple Copy-Paste (https://arxiv.org/abs/2012.07177) This work shows that pasting objects between images is a strong augmentation. Worth trying for rare classes.
+
+Normalized Wasserstein Distance (https://arxiv.org/abs/2110.13389) Proposes a similarity measure for tiny boxes, where IoU is overly sensitive to small shifts. A natural candidate for the required loss-modification experiment.
+
+GIoU (https://arxiv.org/abs/1902.09630) and DIoU/CIoU (https://arxiv.org/abs/1911.08287) IoU-based box regression losses that give useful gradients even when boxes don't overlap. They are the standard alternatives to L1/Smooth L1 and easy to swap into most frameworks. Use this as inspiration for the loss experiments where appliccable.
+
+scikit-learn GroupKFold (https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.GroupKFold.html) Splits data so that all frames from one sequence land in the same fold. Use it to build sequence-level splits without leakage.
+
+Evaluation
+
+COCO detection metrics (https://cocodataset.org/#detection-eval) and COCO paper (https://arxiv.org/abs/1405.0312) Define mAP, AP50 and AP_small exactly as you are asked to report them. Check these definitions so your numbers are comparable across models. This will also help you understand and explain metrics during the defense.
+
+pycocotools (https://github.com/cocodataset/cocoapi) / faster-coco-eval (https://github.com/MiXaiLL76/faster_coco_eval) The reference COCO evaluator and a faster drop-in replacement. Marking ignored regions as iscrowd=1 makes the evaluator skip detections inside them.
+
+TorchMetrics MeanAveragePrecision (https://lightning.ai/docs/torchmetrics/stable/detection/mean_average_precision.html) A COCO-style mAP implementation that plugs into PyTorch training loops. Convenient for tracking validation mAP during training.
+
+TIDE (https://arxiv.org/abs/2008.08115) (code (https://github.com/dbolya/tide)) Breaks detection errors into classification, localization, duplicate, background and missed-object types. This is very useful for the failure-case analysis, since it tells you which error type costs the most mAP. This can be a strong tool for improving your leaderboard score.
+
+FiftyOne (https://docs.voxel51.com/) A tool for browsing predictions against ground truth and filtering by confidence, size or error type. Helps you find failure cases visually instead of scrolling through images.
+
+Inference strategies
+
+SAHI (https://arxiv.org/abs/2202.06934) (code (https://github.com/obss/sahi)) Runs detection on overlapping image slices and merges the results. A simple way to improve small-object recall on high-resolution frames without retraining.
+
+Soft-NMS (https://arxiv.org/abs/1704.04503) Decays the scores of overlapping boxes instead of removing them. Often helps in dense scenes where standard NMS suppresses true neighbours.
+
+Weighted Boxes Fusion (https://arxiv.org/abs/1910.13302) Averages overlapping boxes from several models or TTA passes instead of discarding them. The algorithm is short enough to implement yourself from the paper for ensembling.
+
+Reading for bonus tasks
+
+Data temporality
+
+Seq-NMS (https://arxiv.org/abs/1602.08465): Links high-scoring boxes across frames and rescores them along the sequence. One of the simplest post-processing methods for exploiting temporal consistency.
+T-CNN (https://arxiv.org/abs/1604.02532): Propagates detections to neighbouring frames and rescores them using tubelets. Directly matches the "propagate confident detections" idea in the bonus description.
+Detect to Track and Track to Detect (https://arxiv.org/abs/1710.03958): Trains detection and frame-to-frame tracking jointly. Shows how tracking signals can improve per-frame detection.
+FGFA (https://arxiv.org/abs/1703.10025), SELSA (https://arxiv.org/abs/1907.06390), MEGA (https://arxiv.org/abs/2003.00586): Feature-level temporal aggregation methods for video detection. Read these if you want to go beyond post-processing.
+SORT (https://arxiv.org/abs/1602.00763) and ByteTrack (https://arxiv.org/abs/2110.06864): Lightweight tracking-by-detection methods. ByteTrack's use of low-confidence boxes is especially relevant for recovering missed detections.
+TorchVision RAFT optical flow (https://docs.pytorch.org/vision/main/models/raft.html) and Kornia (https://kornia.readthedocs.io/): A pretrained optical flow model and a differentiable geometry library with homography estimation. Use them to compensate for camera motion before matching boxes across frames.
+Visualization
+
+Grad-CAM (https://arxiv.org/abs/1610.02391): Explains predictions by highlighting the image regions that drive them. Read it to understand what the heatmaps do and don't show.
+pytorch-grad-cam (https://github.com/jacobgil/pytorch-grad-cam): A library with ready examples for Faster R-CNN and YOLO. Saves you from writing detector-specific hooks by hand.
+DETR repository (https://github.com/facebookresearch/detr): Includes a notebook visualizing decoder attention for individual queries. A good template for the attention-map analysis.
+UMAP (https://arxiv.org/abs/1802.03426) (docs (https://umap-learn.readthedocs.io/)): A fast dimensionality reduction method for projecting embeddings to 2D. Useful for plotting RoI features or query embeddings.
+How to Use t-SNE Effectively (https://distill.pub/2016/misread-tsne/): An interactive article on how t-SNE plots can mislead. Read it before drawing conclusions from cluster shapes.
+W&B media logging (https://docs.wandb.ai/guides/track/log/media): Explains how to log images with bounding boxes. The free personal and academic tier covers the logging the bonus requires.
+Custom architectural decision
+
+QueryDet (https://arxiv.org/abs/2106.09018): Uses coarse predictions to decide where to run high-resolution detection. An example of an architectural change aimed specifically at small objects.
+ClusDet (https://arxiv.org/abs/1904.08008): Detects object clusters in aerial images first, then runs fine detection inside them. Relevant for scenes where small objects are unevenly distributed.
+Models
+
+Two-stage anchor-based
+
+Faster R-CNN (https://arxiv.org/abs/1506.01497): Introduces the Region Proposal Network and the standard two-stage design. Essential for explaining what the proposal stage and the second stage each contribute.
+Feature Pyramid Networks (https://arxiv.org/abs/1612.03144): Adds multi-scale feature maps to detectors. Explains why FPN levels matter for small objects and how proposals are assigned to levels.
+Cascade R-CNN (https://arxiv.org/abs/1712.00726): Refines boxes through several stages trained at increasing IoU thresholds. A strong upgrade over Faster R-CNN when localization quality limits mAP.
+Libra R-CNN (https://arxiv.org/abs/1904.02701): Addresses imbalance in RoI sampling, feature levels and the regression loss. Gives concrete ideas for the RoI sampling and box loss experiments.
+One-stage anchor-based
+
+SSD (https://arxiv.org/abs/1512.02325): Predicts boxes from anchors at several feature map scales in a single pass. A simple baseline that shows the core one-stage idea.
+RetinaNet / Focal Loss (https://arxiv.org/abs/1708.02002): Shows that foreground-background imbalance is the main problem for one-stage detectors and fixes it with focal loss. Key reading for the question about removing the proposal stage.
+YOLOv2 (https://arxiv.org/abs/1612.08242): Picks anchor shapes by k-means clustering of training boxes. Use this approach to ground your anchor configuration in the dataset statistics.
+ATSS (https://arxiv.org/abs/1912.02424): Argues that the gap between anchor-based and anchor-free detectors comes mostly from how positives are assigned. Very useful for the comparisons across detector families.
+One-stage anchor-free
+
+FCOS (https://arxiv.org/abs/1904.01355): Predicts boxes from every location inside an object, with centerness to suppress poor predictions. The clearest example of how locations are assigned to objects without anchors.
+CenterNet (Objects as Points) (https://arxiv.org/abs/1904.07850): Represents objects by their center points on a heatmap. Shows a different assignment scheme, which behaves differently for densely packed objects.
+YOLOX (https://arxiv.org/abs/2107.08430): An anchor-free YOLO with the SimOTA dynamic label assignment. Useful for the label assignment experiment.
+Generalized Focal Loss (https://arxiv.org/abs/2006.04388): Merges classification and localization quality into one score and models box edges as distributions. Its distribution focal loss is used in many recent YOLO versions.
+TOOD (https://arxiv.org/abs/2108.07755): Introduces task-aligned assignment, which picks positives by both classification score and IoU. Explains the assigner used in modern Ultralytics YOLOs.
+YOLOv10 (https://arxiv.org/abs/2405.14458): Removes NMS from YOLO with consistent dual assignments. Relevant when comparing NMS-based detectors with query-based ones.
+Ultralytics YOLO overview, YOLOv5 to YOLO26 (https://arxiv.org/abs/2510.09653): Summarizes architectural changes across Ultralytics releases. Check whether your chosen version uses NMS before comparing it with DETR-style models.
+Query-based
+
+DETR (https://arxiv.org/abs/2005.12872): Frames detection as set prediction with bipartite matching, removing anchors and NMS. Required reading for explaining how matching changes training.
+Deformable DETR (https://arxiv.org/abs/2010.04159): Replaces full attention with sparse deformable attention over multi-scale features. Fixes DETR's slow convergence and poor small-object performance.
+DAB-DETR (https://arxiv.org/abs/2201.12329): Uses anchor boxes as decoder queries. Helps interpret what queries represent and how their number relates to scene density.
+DN-DETR (https://arxiv.org/abs/2203.01305): Adds a denoising task that stabilizes bipartite matching early in training. The basis for the "denoising losses" tuning option.
+DINO (https://arxiv.org/abs/2203.03605): Combines denoising, mixed query selection and look-forward box refinement. A strong reference for what a well-tuned DETR looks like.
+RT-DETR (https://arxiv.org/abs/2304.08069) and RT-DETRv2 (https://arxiv.org/abs/2407.17140): Real-time DETRs with an efficient hybrid encoder. A practical choice for training a query-based model within the compute budget.
+D-FINE (https://arxiv.org/abs/2410.13842) and DEIM (https://arxiv.org/abs/2412.04234): Recent real-time DETRs with improved box regression and faster convergence. Worth trying if RT-DETR does not converge within your budget.
+Frameworks and implementations
+
+TorchVision detection tutorial (https://docs.pytorch.org/tutorials/intermediate/torchvision_tutorial.html) and reference scripts (https://github.com/pytorch/vision/tree/main/references/detection): Show how to fine-tune Faster R-CNN, RetinaNet, FCOS and SSD on a custom dataset. The lowest-friction way to train anchor-based and FCOS models with full control over the code.
+Detectron2 (https://github.com/facebookresearch/detectron2): Meta's detection library with configurable two-stage and RetinaNet models. Good if you want fine-grained control over RPN and RoI head settings.
+MMDetection (https://github.com/open-mmlab/mmdetection): The largest model zoo (Cascade R-CNN, ATSS, GFL, DINO and many more) under one config system. Pin library versions, since installation on recent PyTorch can be difficult.
+Ultralytics (https://docs.ultralytics.com/): Easy training of YOLO models and RT-DETR with a shared API, free under the AGPL-3.0 license. Convenient for keeping the training protocol identical across models.
+Hugging Face object detection guide (https://huggingface.co/docs/transformers/tasks/object_detection) and RT-DETRv2 docs (https://huggingface.co/docs/transformers/model_doc/rt_detr_v2): Walk through fine-tuning DETR-family models with the Transformers API. Useful if you prefer the Hugging Face ecosystem for the query-based model.
+Official RT-DETR code (https://github.com/lyuwenyu/RT-DETR): The authors' implementation of RT-DETR and RT-DETRv2. Gives access to all training options, including the ones the higher-level wrappers hide.
+PyTorch transfer learning tutorial (https://docs.pytorch.org/tutorials/beginner/transfer_learning_tutorial.html) and TorchVision models (https://docs.pytorch.org/vision/main/models.html): Explain how to load pretrained weights and fine-tune them. These were in your original list and still fit here.
+Plagiarism
+If you use any code or ideas from external sources or collaboration with others, cite them properly.
+Plagiarism in any form is not allowed. The code will be checked. Any detected plagiarism will result in 0 points for the entire homework.
+No late submissions will be accepted. The timeline is strict, so make sure to submit both your code and report on time (see the Timeline section).
+Citation
+Oleh Basystyi. Multiple Object Video Detection | HW2 | UCU AI 2026. https://www.kaggle.com/competitions/multiple-object-video-detection-hw-2-ucu-ai-2026, 2026. Kaggle.
+
+
+
+Dataset Description
+What you are predicting
+Bounding boxes and classes for every object in each frame of 48 unlabelled drone video clips (test/images/). There are 8 classes:
+
+id	class	id	class
+0	person	4	truck
+1	bicycle	5	tricycle
+2	car	6	bus
+3	van	7	motor
+The footage comes from the VisDrone2019-VID benchmark. Objects are small (often 10–30 px), dense and often occluded.
+
+Files
+train/                  56 clips, 24,201 frames, labelled
+val/                    7 clips, 2,846 frames, labelled
+test/images/            48 clips, 3,811 frames, no labels
+test_images.csv         list of test images and their sizes
+sample_submission.csv   valid submission with empty predictions (scores 0)
+train/ and val/ have the same layout:
+
+images/<clip>/<frame>.jpg
+labels/<clip>/<frame>.txt     YOLO labels
+ignore/<clip>/<frame>.txt     ignored regions (only for frames that have them)
+annotations_coco.json         the same labels in COCO format
+data.yaml                     Ultralytics YOLO config; works with `yolo train data=train/data.yaml`
+Label formats
+YOLO labels (labels/*.txt): one object per line, class cx cy w h, where the box centre and size are normalised to 0–1 by image width and height. Class ids are 0–7 as in the table above.
+
+0 0.328497 0.776455 0.026042 0.116402
+Ignored regions (ignore/*.txt): one region per line, cx cy w h, normalised, with no class. These mark crowds, dense parking lots and other areas too small or too packed to annotate, plus VisDrone's "others" category. Detections there are not penalised in scoring. Treat these areas as "don't care" during training, for example by masking them out or by not counting detections there as background.
+
+COCO (annotations_coco.json): standard COCO with bbox = [x, y, w, h] in pixels, where (x, y) is the top-left corner. Note that COCO category_id is 1-based (1 = person … 8 = motor), unlike the 0-based YOLO and submission ids. Ignored regions are annotations with iscrowd = 1. Extra fields: truncation, occlusion, track_id (the same object across frames), orig_category_id (the original 10-class VisDrone id). images entries carry video and frame_id.
+
+test_images.csv
+column	meaning
+image_id	row id for the submission, e.g. clip_001_0000001
+file_name	path from the data root, e.g. test/images/clip_001/0000001.jpg
+clip	clip name; one public/private leaderboard split per clip
+frame	frame number within the clip, consecutive
+width, height	image size in pixels
+Image sizes vary between clips (from 680×382 up to 1920×1080). Submit boxes in the pixel coordinates of each original image.
+
+Submission
+One row per test image, in the format of sample_submission.csv:
+
+image_id,PredictionString
+clip_001_0000001,2 0.91 1366 580 26 44 0 0.55 809 625 29 66
+clip_001_0000002,
+PredictionString is a space-separated list of class score x y width height groups, where (x, y) is the top-left corner in pixels. This is not the normalised YOLO format. Leave it empty for an image with no detections. At most 500 detections per image are scored.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# UCU AI 2026 — HW2: Multiple Object Video Detection
+**Project Status & Context Handoff**
+
+This notebook serves as the continuation of the Object Detection homework. Below is the complete context, dataset structure, previous findings, and the experimental roadmap required to finish the assignment. 
+
+---
+
+## 1. Task Requirements & Roadmap
+The goal is to build a robust object detector for the VisDrone2019-VID benchmark. The final submission requires a technical report, reproducible code, and a one-on-one defense. 
+
+The code grading is divided into the following checkpoints:
+* **Data Understanding and Preprocessing (1.00 pt)** — EDA, clip-level splits, ignore regions handling, and choosing a resize strategy. *(Completed in Notebook 01)*
+* **Two-stage Anchor-based (1.00 pt)** — Faster R-CNN or Cascade R-CNN. Must include 2+ tuning experiments, evaluation (mAP, AP50, AP_small, inference speed), and failure case analysis. *(Next step)*
+* **One-stage Anchor-based (1.00 pt)** — RetinaNet or SSD. Tune anchors (using K-Means) or focal loss parameters. Compare with the two-stage model.
+* **One-stage Anchor-free (1.00 pt)** — FCOS, CenterNet, or YOLO. Tune label assignment or regression loss. Compare with anchor-based models by object size.
+* **Query-based (0.75 pt)** — RT-DETR or Deformable DETR. Tune queries (based on scene density) or matching costs. Compare with CNN-based detectors.
+* **Your Pipeline (1.25 pt)** — Final solution combining data strategies (SAHI, CopyPaste) and inference strategies (Soft-NMS, WBF) to maximize the private leaderboard score.
+* **Bonus (up to 5 pts)** — Temporal structure exploitation, W&B visualizations (must be logged), or custom architecture decisions.
+
+---
+
+## 2. Dataset Paths & Access
+The data is mounted via Kaggle Inputs. **Always use these exact paths:**
+
+* **Competition Data (Images & Labels):**
+  `/kaggle/input/competitions/multiple-object-video-detection-hw-2-ucu-ai-2026/`
+  * `train/` — 24,201 frames, 56 clips
+  * `val/` — 2,846 frames, 7 clips
+  * `test/images/` — 3,811 frames, 48 clips
+  * `test_images.csv` — Test metadata
+  * `annotations_coco.json` — COCO format labels
+
+* **Custom Dataset (Weights & Code):**
+  `/kaggle/input/datasets/suchok/my-dataset/`
+  * `common.py` — Shared utility functions (must be imported).
+  * `fasterrcnn_resnet50_fpn_v2_coco-dd69338a.pth` — COCO-pretrained Faster R-CNN weights (used for ranking strategies).
+
+* **Previous Artifacts (Notebook 01 & 02 Outputs):**
+  `/kaggle/input/datasets/suchok/outputs-1/`
+  `/kaggle/input/datasets/suchok/outputs-2/` *(Note: Update the path if your dataset name differs)*
+  * `chosen_preprocessing.json` — **CRITICAL.** Contains the locked strategy (strategy="letterbox", size=1280).
+  * `splits/train_clips.txt` & `splits/val_clips.txt` — Official clip-level split (no data leakage).
+  * `gt_eval_subset_ignore.json` — COCO GT for 200 val frames with `iscrowd=1` ignore regions.
+  * `resize_strategy_comparison_ignore.csv` — Metrics from the 4-strategy ablation.
+
+---
+
+## 3. Completed EDA & Preprocessing (Key Findings)
+1. **Class Imbalance:** Dominated by `car` (35.2%) and `person` (24.3%). Rare classes: `bus` (4.5%), `truck` (5.8%). *Action:* Use Focal Loss, CopyPaste, or class-weighted sampling.
+2. **Object Sizes:** 24.9% Small (<32px), 63.5% Medium (32-96px), 11.6% Large. *Action:* Train at 1280x1280 resolution. Use SAHI at inference.
+3. **Scene Density:** Mean 66.8 objects/frame, Max 342. *Action:* Query-based models need >300 queries. Use Soft-NMS to avoid suppressing valid neighbors.
+4. **Clip Variance:** Average object size varies drastically per clip (28px to 156px). *Action:* Sequence-level splits are mandatory. Use aggressive RandomScale augmentation.
+5. **Preprocessing Decision:** Tested `letterbox-1024`, `letterbox-1280`, `plain-1280`, and `randompad`. `letterbox-1280` was chosen. Padding value = 114, interpolation = `cv2.INTER_LINEAR`.
+6. **Ignore Regions:** Handled as `iscrowd=1` in the COCO evaluation. During training, anchors located inside ignore regions must be excluded from the negative set.
+7. **Augmentation Plan:** HorizontalFlip (p=0.5), RandomScale (0.8-1.25), ColorJitter, RandomBrightnessContrast, and Mosaic (one-stage only). No rotation or random crops (destroys small objects).
+
+---
+
+## 4. Utilities in `common.py`
+You must import this file using `sys.path.insert(0, str(DATASET_DIR))` and `from common import *`.
+* **Constants:** `SEED=28`, `CLASS_NAMES`, `NUM_CLASSES`.
+* **Image / Resize / Transforms:** `letterbox`, `plain_resize`, `random_pad_canvas`, `apply_strategy`, `scale_boxes_down`, `boxes_to_original`.
+* **Label Loading:** `load_yolo_labels`, `load_ignore_regions`.
+* **Indexing & Splits:** `index_split`, `read_image_sizes`, `load_splits`, `save_splits`, `filter_by_clips`, `make_eval_subset`.
+* **COCO & Eval:** `build_coco_gt` (supports `iscrowd=1`), `predictions_to_coco`, `coco_eval_summary` (returns mAP, AP50, AP_small, etc.).
+* **Inference & Submission:** `run_detector`, `predict_with_strategy`, `predict_test_and_write_submission`.
+* **Misc:** `set_seeds`.
+
+---
+
+## 5. Next Steps (Implementation Plan)
+1. **Faster R-CNN Notebook:** Load pretrained weights, replace the head for 8 classes + background (num_classes=9). Train using `letterbox-1280`. Run 2 tuning experiments (e.g., `rpn_post_nms_top_n` and RoI sampling ratio). Evaluate on the full val set. Analyze 3 failure cases.
+2. **RetinaNet Notebook:** Use the K-Means anchors derived from EDA. Tune focal loss parameters. Compare with Faster R-CNN.
+3. **FCOS/YOLO Notebook:** Anchor-free implementation. Tune label assignment. Break down results by object size (AP_small vs AP_large).
+4. **RT-DETR Notebook:** Ensure queries > 300. Plot mAP vs training budget against a CNN detector.
+5. **Final Pipeline:** Apply SAHI, Soft-NMS, and Weighted Boxes Fusion (WBF) on the best model(s). Generate the final `submission.csv`.
+
+
+
+
+
+
+
+
+# Структура ноутбуків для HW2 (UCU AI 2026)
+
+Нижче — запропонована структура робочого простору. Логіка: **один ноутбук = один чекпойнт або один тип експерименту**, все спільне живе в `common.py`, важкі артефакти (ваги, метрики, submission) зберігаються в `/kaggle/working/` і публікуються як Kaggle Dataset для наступних ноутбуків.
+
+```
+project/
+├── common.py                          # спільні функції (вже є)
+├── nb00_setup_and_smoke_test.ipynb
+├── nb01_data_understanding.ipynb       ✅ (виконано)
+├── nb02_preprocessing_ablation.ipynb   ✅ (виконано)
+├── nb03_fasterrcnn_baseline.ipynb
+├── nb04_fasterrcnn_tuning.ipynb
+├── nb05_retinanet_baseline.ipynb
+├── nb06_retinanet_tuning.ipynb
+├── nb07_fcos_baseline.ipynb
+├── nb08_fcos_tuning.ipynb
+├── nb09_rtdetr.ipynb
+├── nb10_failure_analysis_and_tide.ipynb
+├── nb11_pipeline_sahi_softnms_wbf.ipynb
+├── nb12_final_submission.ipynb
+└── nb13_bonus_temporal_visualization.ipynb
+```
+
+---
+
+## `nb00_setup_and_smoke_test.ipynb`
+**Ціль:** швидка перевірка, що оточення, шляхи, `common.py`, ваги та COCO-евалюатор працюють, перш ніж витрачати GPU-години. Виконується на CPU.
+
+Підзаголовки:
+1. **Environment check** — версії `torch`, `torchvision`, `pycocotools`/`faster-coco-eval`, `albumentations`, `ultralytics`, `wandb`; перевірка GPU.
+2. **Paths & constants** — завантажити `chosen_preprocessing.json`, `splits/*.txt`, `gt_eval_subset_ignore.json`; assert, що файли на місці.
+3. **Import `common.py`** — `sys.path.insert`, `from common import *`, перевірка що всі ключові функції доступні.
+4. **Smoke test: dataset loader** — завантажити 1 батч з train/val, візуалізувати letterbox-1280, перевірити що bbox масштабуються правильно.
+5. **Smoke test: COCO eval** — прогнати `coco_eval_summary` на порожніх передбаченнях (mAP≈0), перевірити `iscrowd=1` обробку.
+6. **Smoke test: pretrained model** — завантажити Faster R-CNN COCO, передбачити на 1 зображенні, візуалізувати.
+7. **W&B init** — перевірити логін і створення проєкту (для бонусу).
+
+---
+
+## `nb01_data_understanding.ipynb` ✅
+**Ціль:** EDA, який інформує всі наступні рішення (input resolution, anchors, augmentation, class weights).
+
+Підзаголовки (для довідки, виконано):
+1. Class distribution per split and per clip
+2. Object size distribution (COCO bins: small/medium/large)
+3. Objects per frame (density histogram, max, per clip)
+4. Per-clip size statistics (mean bbox area variance)
+5. Ignore-region statistics
+6. Frame subsampling justification (step size vs clip variance)
+7. Outputs: `eda_stats.json`, plots для звіту
+
+---
+
+## `nb02_preprocessing_ablation.ipynb` ✅
+**Ціль:** обрати стратегію ресайзу на основі mAP з `iscrowd=1` на фіксованому eval-subset.
+
+Підзаголовки (для довідки):
+1. Four strategies setup (letterbox-1024/1280, plain-1280, randompad)
+2. Fixed eval subset (200 val frames) + COCO GT with ignore
+3. Zero-shot COCO Faster R-CNN baseline per strategy
+4. Metrics table + visual comparison
+5. **Lock decision → `chosen_preprocessing.json`**
+
+---
+
+## `nb03_fasterrcnn_baseline.ipynb`
+**Ціль:** чистий baseline two-stage детектора під фіксованим протоколом (letterbox-1280, clip-level split, iscrowd ignore). Це "initial" модель, з якою порівнюватиметься все інше.
+
+Підзаголовки:
+1. **Setup** — load `chosen_preprocessing.json`, splits, `common.py`; seed.
+2. **Dataset class** — `VisDroneDataset` з Albumentations (HFlip, RandomScale, ColorJitter); маскування ignore-regions у негативах.
+3. **Model** — `fasterrcnn_resnet50_fpn_v2`, заміна head на 9 класів, завантаження COCO ваг з `my-dataset/`.
+4. **Training config** — optimizer, LR schedule, batch size, num epochs; W&B init.
+5. **Train loop** — з валідацією кожні N епох; логування loss curves у W&B.
+6. **Evaluation on val** — mAP, AP50, AP_small, AP_medium, AP_large через `coco_eval_summary`.
+7. **Inference speed** — ms/image на GPU та CPU, FPS.
+8. **Save artifacts** — `fasterrcnn_baseline_best.pth`, `metrics_baseline.json`, W&B run URL.
+9. **Qualitative check** — 4-6 прикладів передбачень з GT.
+
+---
+
+## `nb04_fasterrcnn_tuning.ipynb`
+**Ціль:** ≥2 експерименти з гіперпараметрами two-stage + аналіз трьох failure cases. Завантажує baseline-ваги з `nb03`.
+
+Підзаголовки:
+1. **Setup** — load baseline metrics, splits, `chosen_preprocessing.json`.
+2. **Experiment A: RPN proposals** — `rpn_pre_nms_top_n_train/post`, `rpn_post_nms_top_n_test` (e.g. 1000 → 2000/3000); фіксовані інші параметри.
+3. **Experiment B: RoI sampling ratio** — `box_batch_size_per_image`, `box_positive_fraction` (0.25 → 0.5), `box_score_thresh`.
+4. **Experiment C (optional): box regression loss** — SmoothL1 → GIoU/CIoU (потребує кастомного head).
+5. **Experiment D (optional): LR schedule** — step → cosine + warmup.
+6. **Comparison table** — baseline vs A vs B vs C/D; mAP/AP50/AP_small/speed.
+7. **Failure case analysis** — 3 випадки: (a) пропущений small object, (b) duplicate/over-suppressed box, (c) misclassification van↔truck; з поясненням причин (RPN recall, RoI resolution, class imbalance).
+8. **Save** — `fasterrcnn_tuned_best.pth`, `metrics_fasterrcnn_tuned.json`.
+
+---
+
+## `nb05_retinanet_baseline.ipynb`
+**Ціль:** one-stage anchor-based baseline під тим самим протоколом, з anchor scales/ratios, обґрунтованими EDA.
+
+Підзаголовки:
+1. **Setup** — ідентичні splits/препроцесинг; seed.
+2. **Anchor config from data** — K-Means кластеризація bbox (W,H) з train → scales/ratios; порівняння з дефолтними RetinaNet anchors.
+3. **Dataset class** — той самий, але з Mosaic (one-stage only) як у плані.
+4. **Model** — `retinanet_resnet50_fpn_v2`, 9 класів, pretrained COCO.
+5. **Training config** — focal loss (α, γ дефолт), LR, epochs; W&B.
+6. **Train loop + val eval** — mAP/AP50/AP_small/speed.
+7. **Comparison with `fasterrcnn_tuned`** — таблиця + обговорення (чи страждає one-stage від дисбалансу foreground/background).
+8. **Save artifacts.**
+
+---
+
+## `nb06_retinanet_tuning.ipynb`
+**Ціль:** ≥2 тюнінг-експерименти one-stage (anchor assignment / focal loss) + обговорення "чи можна без proposal".
+
+Підзаголовки:
+1. **Setup** — load baseline metrics.
+2. **Experiment A: focal loss parameters** — γ ∈ {1.5, 2.0, 3.0}, α ∈ {0.25, 0.5}; логування classification loss у W&B.
+3. **Experiment B: IoU assignment thresholds** — `fg_iou_thresh`, `bg_iou_thresh` (0.5/0.4 → 0.4/0.3); вплив на дрібні об'єкти.
+4. **Experiment C: anchor scales** — розширити дрібні масштаби (`[16, 32, 64, ...]` → `[8, 16, 24, 32, ...]`).
+5. **Discussion** — чому one-stage без proposal може програвати на дрібних/рідкісних класах; як focal + anchor tuning це компенсує.
+6. **Comparison table** — baseline / A / B / C / fasterrcnn_tuned.
+7. **Save** — `retinanet_tuned_best.pth`, `metrics_retinanet_tuned.json`.
+
+---
+
+## `nb07_fcos_baseline.ipynb`
+**Ціль:** anchor-free baseline (FCOS) під тим самим протоколом.
+
+Підзаголовки:
+1. **Setup** — splits, препроцесинг, seed.
+2. **Dataset class** — без Mosaic (anchor-free чутливіший до дрібних об'єктів), HFlip + RandomScale.
+3. **Model** — `fcos_resnet50_fpn`, 9 класів, pretrained COCO.
+4. **Assignment primer** — пояснення (у маркдауні): як FCOS призначає локації (center sampling + centerness), чому це допомагає щільним сценам.
+5. **Training config + train loop** — W&B.
+6. **Val eval** — mAP, AP50, AP_small/medium/large, speed.
+7. **Save artifacts.**
+
+---
+
+## `nb08_fcos_tuning.ipynb`
+**Ціль:** ≥2 тюнінг-параметри anchor-free + розбивка результатів за розміром об'єкта.
+
+Підзаголовки:
+1. **Setup** — load baseline.
+2. **Search range** — `fcos` `center_sampling_radius` та min/max level sizes; таблиця значень.
+3. **Experiment A: input resolution** — 1280 → 1536 (вплив на AP_small).
+4. **Experiment B: label assignment** — `center_sampling_radius` ∈ {1.0, 1.5, 2.0}; альтернативно — ATSS-style assigner (якщо реалізовно в torchvision).
+5. **Experiment C: box regression loss** — IoU/GIoU vs дефолтний SmoothL1 (кастомний FCOS head).
+6. **Results broken down by size** — AP_small / AP_medium / AP_large: FCOS vs RetinaNet vs Faster R-CNN.
+7. **Discussion** — чи допомагає anchor-free на щільних сценах, і де саме.
+8. **Save** — `fcos_tuned_best.pth`, `metrics_fcos_tuned.json`.
+
+---
+
+## `nb09_rtdetr.ipynb`
+**Ціль:** query-based детектор під співмірним compute budget + аналіз проти CNN-детекторів.
+
+Підзаголовки:
+1. **Setup** — той самий протокол; перевірка, що RT-DETR доступний (Ultralytics або HF `rt_detr_v2`).
+2. **Query count rationale** — з EDA: max 342 objects/frame → queries ≥ 300 (e.g. 300 → 600).
+3. **Model** — RT-DETR pretrained, 8 класів; окремі LR для backbone/transformer.
+4. **Experiment A: number of queries** — 300 vs 600.
+5. **Experiment B: matching cost weights** — class vs L1 vs GIoU ваги (якщо доступно у конфігу).
+6. **Experiment C (optional): denoising / auxiliary losses.**
+7. **Training loop + W&B** — обмежений budget (e.g. 40 епох, як у CNN-детекторів).
+8. **mAP vs training budget plot** — RT-DETR vs Faster R-CNN vs FCOS (з логів W&B).
+9. **Discussion** — bipartite matching vs NMS; чи конвергував у бюджеті; поведінка на дрібних/щільних сценах.
+10. **Save** — `rtdetr_best.pth`, `metrics_rtdetr.json`.
+
+---
+
+## `nb10_failure_analysis_and_tide.ipynb`
+**Ціль:** систематичний аналіз помилок найкращої моделі за допомогою TIDE + FiftyOne. Живить секцію звіту "Results and analysis".
+
+Підзаголовки:
+1. **Load best model predictions** на повному val.
+2. **TIDE breakdown** — classification / localization / duplicate / background / missed; порівняти для найкращих моделей кожного типу.
+3. **Size-stratified errors** — де концентруються FP vs FN для small objects.
+4. **Qualitative grid** — 6-10 прикладів (FiftyOne або matplotlib) з поясненнями.
+5. **Failure taxonomy** — зведена таблиця (клас × тип помилки) → висновки для `nb11`.
+
+---
+
+## `nb11_pipeline_sahi_softnms_wbf.ipynb`
+**Ціль:** "Your Pipeline" (1.25 pt) — data & inference strategies на основі `nb10`, з чесним порівнянням кожного кроку.
+
+Підзаголовки:
+1. **Setup** — load best checkpoints (Faster R-CNN, RetinaNet, FCOS, RT-DETR).
+2. **Strategy 1: Soft-NMS vs NMS** — на щільних val-кадрах; метрики.
+3. **Strategy 2: SAHI** — slicing з overlap, merge; вплив на AP_small.
+4. **Strategy 3: TTA** — HFlip TTA + WBF merge.
+5. **Strategy 4: Ensemble (WBF)** — найкращі 2-3 моделі; tune weights.
+6. **Ablation table** — incremental gains: baseline → +Soft-NMS → +SAHI → +TTA → +Ensemble.
+7. **Discussion** — які зміни реально генералізують, які ні (включно з невдалими спробами).
+8. **Save** — `pipeline_config.json`, `val_predictions_pipeline.json`.
+
+---
+
+## `nb12_final_submission.ipynb`
+**Ціль:** відтворювана генерація фінального `submission.csv` з обраного пайплайну. Мінімальний ноутбук — тільки запуск, без експериментів.
+
+Підзаголовки:
+1. **Setup** — load `pipeline_config.json`, checkpoints, seeds.
+2. **Test data iteration** — `predict_with_strategy` на `test/images/` за `test_images.csv`.
+3. **Post-processing** — Soft-NMS/SAHI/WBF з фінальним конфігом.
+4. **Format conversion** — до `PredictionString` (class score x y w h, pixel coords, ≤500 детекцій).
+5. **Validation checks** — рядки = кількість test images, формат валідний, no NaN, bbox у межах зображення.
+6. **Write `submission.csv`** + `submission_metadata.json` (яка модель/пайплайн/seed).
+
+---
+
+## `nb13_bonus_temporal_visualization.ipynb`
+**Ціль:** бонус (до 5 pt) — темпоральність + W&B візуалізації. Окремо, щоб не забруднювати основні ноутбуки.
+
+Підзаголовки:
+1. **Setup** — load best pipeline predictions на val.
+2. **Bonus A: ByteTrack / Seq-NMS** — propagate confident detections між кадрами; метрики до/після.
+3. **Bonus A2 (optional): optical flow (RAFT)** — компенсація camera motion перед matching.
+4. **Bonus B: Feature embeddings** — RoI/query features → UMAP, colored by class/size/correctness.
+5. **Bonus B2: Attention maps** — RT-DETR decoder cross-attention per query.
+6. **Bonus B3: Grad-CAM** — на FPN рівнях CNN-детекторів, correct vs failed detections.
+7. **W&B report** — посилання на публічний проєкт з усіма кривими, конфігами, візуалізаціями.
+8. **Conclusions** — по кожній візуалізації: що показує і що з цього випливає.
+
+---
+
+## Наскрізні правила для всіх ноутбуків
+
+1. **Перша клітинка:** `sys.path.insert(0, DATASET_DIR); from common import *; set_seeds(SEED)`.
+2. **Друга клітинка:** шляхи (`DATA_DIR`, `OUT_DIR`, `ARTIFACTS_DIR`) — тільки через змінні, жодних хардкодів усередині циклів.
+3. **Третя клітинка:** load `chosen_preprocessing.json` + splits; assert, що артефакти попередніх ноутбуків доступні.
+4. **Кожен експеримент → окрема секція з маркдауном:** мета, змінені параметри, результат.
+5. **W&B:** одна run на експеримент, tag: `nb0X/model/exp-Y`. Наприкінці — лінк у маркдауні.
+6. **Артефакти:** зберігати `*_best.pth` + `metrics_*.json` у `/kaggle/working/artifacts/`; публікувати як Kaggle Dataset після кожного ноутбука, щоб наступні не перезапускали тренування.
+7. **Не тримати важкі обчислення в nb12** — тільки інференс із завантаженими вагами.
+8. **Версійність:** `nb03..nb09` — кожен незалежний (можна запускати в будь-якому порядку після `nb02`); `nb10` залежить від результатів усіх моделей; `nb11` — від `nb10`; `nb12` — від `nb11`.
+
+Якщо хочеш, можу наступним кроком розписати детально **вміст `nb03`** — клітинка за клітинкою (які саме функції з `common.py` викликати, які конфіги виставити), щоб одразу можна було копіювати.
