@@ -33,6 +33,8 @@ from tqdm.auto import tqdm
 
 import torch
 from torchvision.transforms import functional as TF
+from torchvision.ops import box_iou
+from torchvision.models.detection._utils import Matcher
 
 from pycocotools.coco import COCO
 from pycocotools.cocoeval import COCOeval
@@ -483,3 +485,185 @@ def make_eval_subset(val_index, n=200, seed=SEED):
     benchmarks. Final models are evaluated on the FULL val set.
     """
     return val_index.sample(min(n, len(val_index)), random_state=seed).reset_index(drop=True)
+
+
+# ---------------------------------------------------------------------------
+
+def list_clips(split_dir):
+    """Return sorted clip folder names under split_dir/images/."""
+    images_root = Path(split_dir) / "images"
+    assert images_root.exists(), f"missing images folder: {images_root}"
+    return sorted(p.name for p in images_root.iterdir() if p.is_dir())
+
+def build_fullval_gt(val_index, out_json, include_ignore=True):
+    """Convenience wrapper: build GT for the full val split and cache it."""
+    build_coco_gt(val_index, out_json, include_ignore=include_ignore)
+    return out_json
+
+# ---------------------------------------------------------------------------
+# 9. Training dataset + collate
+# ---------------------------------------------------------------------------
+
+class VisDroneDetectionDataset(torch.utils.data.Dataset):
+    """Returns (image_tensor, target) for torchvision detectors.
+
+    target keys: boxes (float32, xyxy, network canvas), labels (int64, 1..8),
+                 image_id, area, iscrowd, ignore_boxes (float32, xyxy, canvas).
+
+    Augmentation is applied on ORIGINAL pixel boxes before the resize strategy.
+    is_train=True enables augmentation; is_train=False returns clean samples.
+    """
+    def __init__(self, index_df, strategy, size, is_train=False, transforms=None):
+        self.df        = index_df.reset_index(drop=True)
+        self.strategy  = strategy
+        self.size      = size
+        self.is_train  = is_train
+        self.transforms = transforms
+
+    def __len__(self):
+        return len(self.df)
+
+    def __getitem__(self, idx):
+        row = self.df.iloc[idx]
+        img = cv2.cvtColor(cv2.imread(row["image_path"]), cv2.COLOR_BGR2RGB)
+        h0, w0 = img.shape[:2]
+
+        boxes, labels = load_yolo_labels(row["label_path"], w0, h0)
+        ign           = load_ignore_regions(row["ignore_path"], w0, h0)
+
+        if self.is_train and self.transforms is not None:
+            out = self.transforms(
+                image=img,
+                bboxes=boxes.tolist(),
+                labels=labels.tolist(),
+                ignore_bboxes=ign.tolist(),
+            )
+            img    = out["image"]
+            boxes  = np.array(out["bboxes"], dtype=np.float32).reshape(-1, 4)
+            labels = np.array(out["labels"], dtype=np.int64).reshape(-1)
+            ign    = np.array(out["ignore_bboxes"], dtype=np.float32).reshape(-1, 4)
+            h0, w0 = img.shape[:2]
+
+        img_net, meta = apply_strategy(img, self.strategy, self.size,
+                                       seed_key=row["image_path"])
+        boxes_net = scale_boxes_down(boxes, meta, self.strategy)
+        ign_net   = scale_boxes_down(ign,   meta, self.strategy) if len(ign) else \
+                    np.zeros((0, 4), dtype=np.float32)
+
+        areas = (boxes_net[:, 2] - boxes_net[:, 0]) * (boxes_net[:, 3] - boxes_net[:, 1]) \
+                if len(boxes_net) else np.zeros((0,), dtype=np.float32)
+
+        target = {
+            "boxes":        torch.as_tensor(boxes_net, dtype=torch.float32),
+            "labels":       torch.as_tensor(labels + 1, dtype=torch.int64),  # bg=0, classes 1..8
+            "image_id":     torch.tensor([idx], dtype=torch.int64),
+            "area":         torch.as_tensor(areas, dtype=torch.float32),
+            "iscrowd":      torch.zeros((len(boxes_net),), dtype=torch.int64),
+            "ignore_boxes": torch.as_tensor(ign_net, dtype=torch.float32),
+        }
+
+        img_t = TF.to_tensor(img_net)
+        img_t = TF.normalize(img_t, mean=IMAGENET_MEAN, std=IMAGENET_STD)
+        return img_t, target
+
+
+def detection_collate(batch):
+    """torchvision detectors take a list of (image, target) tuples."""
+    return tuple(zip(*batch))
+
+# ---------------------------------------------------------------------------
+# 10. Ignore-aware label assignment (training-time ignore masking)
+# ---------------------------------------------------------------------------
+
+def assign_labels_with_ignore(anchors, gt_boxes, gt_labels, ignore_boxes,
+                              high_thresh=0.5, low_thresh=0.4,
+                              ignore_iou_thresh=0.3):
+    """Matcher + ignore mask.
+
+    Returns (matched_labels, matched_boxes) with labels in {-1, 0, 1..8}.
+    -1 = ignored (anchor overlaps an ignore region, contributes nothing to loss).
+    """
+    matcher = Matcher(high_thresh, low_thresh, allow_low_quality_matches=True)
+    matched_labels, matched_boxes = matcher(anchors, gt_boxes)
+
+    if len(gt_labels) == 0:
+        return matched_labels, matched_boxes
+
+    matched_labels = matched_labels.clone()
+    matched_labels[matched_labels > 0] = gt_labels[matched_labels[matched_labels > 0] - 1]
+
+    if ignore_boxes is not None and len(ignore_boxes) > 0:
+        ignore_iou = box_iou(anchors, ignore_boxes).max(dim=1).values
+        ignored    = (ignore_iou > ignore_iou_thresh) & (matched_labels >= 0)
+        matched_labels[ignored] = -1
+
+    return matched_labels, matched_boxes
+
+# ---------------------------------------------------------------------------
+# 11. Full-val benchmark helper
+# ---------------------------------------------------------------------------
+
+def evaluate_full_val(model, val_index, strategy, size, gt_json,
+                     score_thr=0.001, device=None, out_json=None):
+    """Predict on full val set, evaluate against gt_json, return metrics dict.
+
+    Returns (metrics, pred_json_path). Also caches the JSON for TIDE / WBF reuse.
+    """
+    if out_json is None:
+        out_json = str(Path("/kaggle/working") / "val_preds_tmp.json")
+    predictions_to_coco(val_index, model, strategy, size, out_json,
+                        score_thr=score_thr, device=device)
+    metrics = coco_eval_summary(gt_json, out_json)
+    return metrics, out_json
+
+# ---------------------------------------------------------------------------
+# 12. Speed benchmark
+# ---------------------------------------------------------------------------
+
+def benchmark_speed(model, index_df, strategy, size, n=100,
+                    device=None, score_thr=0.5, warmup=5):
+    """Return dict with GPU ms/image, CPU ms/image, GPU FPS."""
+    model.eval()
+    if device is None:
+        device = next(model.parameters()).device
+
+    def _run(dev, n_iter):
+        times = []
+        for i in range(warmup + n_iter):
+            img_path = index_df.iloc[i % len(index_df)]["image_path"]
+            if dev == "cuda":
+                torch.cuda.synchronize()
+            t0 = time.time()
+            _ = predict_with_strategy(model, img_path, strategy, size,
+                                      score_thr=score_thr, device=dev)
+            if dev == "cuda":
+                torch.cuda.synchronize()
+            if i >= warmup:
+                times.append(time.time() - t0)
+        return float(np.mean(times)), float(np.std(times))
+
+    gpu_ms = None; gpu_fps = None
+    if device != "cpu":
+        m, _ = _run(device, n); gpu_ms = m * 1000; gpu_fps = 1.0 / m
+    m_cpu, _ = _run("cpu", max(10, n // 5))   # fewer CPU iters
+
+    return {
+        "device": str(device),
+        "gpu_ms_per_image": gpu_ms,
+        "gpu_fps": gpu_fps,
+        "cpu_ms_per_image": m_cpu * 1000,
+    }
+
+# ---------------------------------------------------------------------------
+# 13. Artifact saving
+# ---------------------------------------------------------------------------
+
+def save_checkpoint(model, out_path):
+    torch.save(model.state_dict(), str(out_path))
+    return str(out_path)
+
+def save_metrics(metrics_dict, out_path):
+    with open(str(out_path), "w") as f:
+        json.dump(metrics_dict, f, indent=2, default=float)
+    return str(out_path)
+

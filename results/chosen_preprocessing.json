@@ -1,8 +1,0 @@
-{
-  "strategy": "letterbox",
-  "size": 1280,
-  "mAP_ignore": 0.01253286997837542,
-  "AP50_ignore": 0.02705221597217152,
-  "AP_small_ignore": 0.010949753450417026,
-  "notes": "chosen on 200-frame eval subset with iscrowd=1 ignore"
-}
