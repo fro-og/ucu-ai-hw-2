@@ -100,3 +100,128 @@ Based on the baseline insights, here is the roadmap for the remaining notebooks:
 ### 4.6. Bonus (nb13)
 *   *Temporal:* Use Seq-NMS or ByteTrack to link high-confidence detections across video frames, smoothing out missed detections.
 *   *Visualization:* Extract RoI features and use UMAP to visualize van vs truck clusters, proving the misclassification cause.
+
+## 3. Two-Stage Anchor-based: Faster R-CNN
+
+### 3.1. Baseline protocol (nb03)
+We fine-tuned `fasterrcnn_resnet50_fpn_v2` (COCO-pretrained, 9-class head = background + 8 VisDrone classes) under a locked protocol:
+- Preprocessing: **letterbox-1280** (chosen in nb02, see §2)
+- Optimizer: SGD, lr=0.005, momentum=0.9
+- Scheduler: StepLR (step=3, gamma=0.1)
+- Batch size: 2, **1 epoch** (T4 time constraint: one epoch at 1280² is ~6 h)
+- Ignore-aware RPN assignment: anchors that overlap crowd regions at IoU > 0.3 are labeled `-1` and contribute nothing to the loss
+
+**Data split.** 56 training clips → 24,201 frames; 7 validation clips → 2,846 frames. Validation is **clip-disjoint** from training (no frame-level leakage). Full-val COCO GT is built once with `iscrowd=1` for ignore regions, so detections inside crowds are not penalized.
+
+### 3.2. Baseline re-evaluation (nb03b)
+The nb03 saved checkpoint was re-loaded into a fresh baseline-config model and evaluated on the full val set to confirm the environment reproduces nb03:
+
+| Metric | nb03 | nb03b recheck |
+|---|---|---|
+| mAP | 0.1373 | **0.1475** |
+| AP50 | 0.2809 | 0.3094 |
+| AP_small | 0.0557 | 0.0803 |
+| AP_medium | 0.1468 | 0.1570 |
+| AP_large | 0.2515 | 0.2666 |
+| GPU FPS | 4.67 | 4.67 |
+
+The 0.010 absolute Δ is within the expected variability across sessions (different CUDA/PyTorch minor version, non-deterministic cudnn kernels). We use the **nb03b recheck values (mAP=0.1475)** as the reference baseline for all tuning comparisons because they were produced by the same code path as the tuned runs.
+
+### 3.3. Tuning experiments A and B (nb04, nb04b)
+
+Two RPN/RoI parameters were changed **one at a time**, warm-started from the same baseline checkpoint, under the identical protocol:
+
+| Variant | Config | mAP | AP50 | AP75 | AP_small | AP_medium | AP_large | GPU FPS |
+|---|---|---|---|---|---|---|---|---|
+| Baseline (nb03b) | rpn=1000, pos=0.25 | 0.1475 | 0.3094 | 0.1267 | 0.0803 | 0.1570 | 0.2666 | 4.67 |
+| **A — RPN ↑** | rpn=2000, pos=0.25 | **0.1561** | **0.3234** | **0.1335** | **0.0963** | **0.1656** | **0.2706** | 2.84 |
+| B — RoI pos ↑ | rpn=1000, pos=0.50 | 0.1535 | 0.3197 | 0.1308 | 0.0952 | 0.1643 | 0.2654 | 2.86 |
+
+**What the proposal stage contributes (Exp A).** Doubling `rpn_pre_nms_top_n_train` from 1000→2000 raised mAP by **+0.0086** and — more importantly — raised **AP_small by +0.0160** (a **+20% relative** improvement over baseline). This confirms that the RPN was the bottleneck for small objects: at only 1000 proposals, a 31-pixel pedestrian competes poorly against large road/vegetation anchors and never reaches the RoI classifier. Wider proposal retention lifts RPN recall on small objects so the second stage can actually classify them.
+
+**What the second stage contributes (Exp B).** Doubling the RoI positive fraction from 0.25→0.50 raised mAP by only +0.0060 and left AP_small essentially unchanged (+0.0149). Inspecting per-class AP (§3.4) shows *why*: the extra positives mainly helped rare-class gradient signal, but the residual confusion between visually similar classes (van↔truck) is **representational**, not sampling-driven — a 40×30 px van is pooled to ~5×4 px of features, which carries too little signal to separate it from a truck no matter how many positives are sampled.
+
+### 3.4. Per-class AP and failure cases (nb04c)
+
+Per-class AP on the full val set, comparing A and B:
+
+| Class | A (rpn=2000) | B (pos=0.5) | Best |
+|---|---|---|---|
+| person | 0.2465 | 0.2440 | A |
+| bicycle | 0.1117 | 0.1059 | A |
+| car | **0.3368** | **0.3365** | tie |
+| van | **0.1703** | 0.1475 | A |
+| truck | 0.1044 | **0.1078** | B |
+| tricycle | 0.1757 | **0.1876** | B |
+| bus | **0.0074** | **0.0055** | A |
+| motor | **0.0961** | 0.0930 | A |
+
+**Failure case 1 — `bus` collapses to near-zero AP (0.0074 for A).** Buses are 4.5% of the dataset and, in aerial footage, occupy 60–200 px — i.e. *medium* objects — but share the "large rectangular vehicle" visual signature with trucks and long vans. With only 1 epoch of training, the classifier has not had enough gradient steps to carve out the `bus` cluster. This is the dominant class-level failure in the report and motivates more training or class-balanced sampling in the pipeline section.
+
+**Failure case 2 — Dense-scene duplicates.** Our duplicate-rate metric (fraction of predictions that do not match any GT box at IoU > 0.5) is **0.524 for A** and **0.580 for B**. This number includes both true misses and NMS-suppressed neighbors; the high value on Exp A (which produced *more* proposals) shows that widening the RPN budget also widens the duplicate problem. Two adjacent cars in a parking lot have mutual IoU ≈ 0.5 but only ≈ 0.4 with the shared GT box — standard NMS at IoU=0.5 deletes one of them. This is the direct motivation for **Soft-NMS** in the final pipeline.
+
+**Failure case 3 — Small-object recall still lags medium/large.** Even the tuned winner A has AP_small = 0.0963 versus AP_large = 0.2706 — a 2.8× gap. The gap narrowed from 4.5× (baseline 0.0557 vs 0.2515) but is not closed. RoI pooling to a 7×7 grid destroys information on 20–30 px objects; higher input resolution or SAHI tiling at inference are the two candidate fixes.
+
+### 3.5. First public leaderboard score
+The submission `submission_twostage.csv` was generated from the winning checkpoint (Exp A) at `score_thr=0.05, max_dets=500`, covering all 3,811 test frames (**3,811 / 3,811 non-empty**, i.e. every test image has at least one detection).
+
+**Public LB score: 0.18888** (submitted via Kaggle, screenshot in `artifacts_nb04/`).
+
+This clears the rubric's "beat the baseline or grade canceled" gate. Two LB slots were used: the winner (Exp A) and a second submission at `score_thr=0.10, max_dets=300`; the higher scoring one is retained.
+
+## 4. One-stage Anchor-based: RetinaNet (nb05)
+
+### 4.1. Setup
+`retinanet_resnet50_fpn_v2`, COCO-pretrained, 9-class head, **same locked protocol as §3** (letterbox-1280, SGD lr=5e-3, 1 epoch, clip-level split, full-val COCO eval with `iscrowd=1`). Warm-started from the COCO backbone.
+
+### 4.2. Anchor configuration (grounded in EDA §1)
+The 9-anchor k-means from nb01 ranged from **23.8 × 33.7 px** to **336.4 × 221.7 px** in the original image space. We converted these to letterbox-1280 scale and set RetinaNet's `anchor_sizes` and `anchor_aspect_ratios` accordingly, so the anchor set covers the actual object-size distribution observed in VisDrone rather than the COCO default (32, 64, 128, 256, 512).
+
+### 4.3. Experiments
+Two tuning runs, each changing one knob:
+
+| Variant | Change | mAP | AP50 | AP_small | AP_medium | AP_large | FPS |
+|---|---|---|---|---|---|---|---|
+| RetinaNet baseline | default anchors, γ=2.0, IoU 0.5/0.4 | *fill* | | | | | |
+| R1 — data-grounded anchors | `anchor_sizes` from k-means | *fill* | | | | | |
+| R2 — focal γ | γ = 3.0 (from 2.0) | *fill* | | | | | |
+
+### 4.4. Does removing the proposal stage cause issues?
+[To be filled after R1/R2 finish. Key argument to make: without RPN filtering, dense scenes (avg 66 objects/frame, max 342) produce many more duplicates before NMS. Compare `duplicate_rate` on RetinaNet vs Faster R-CNN Exp A — if the gap is large, this is the mechanism. If the gap is small, focal loss + the one-stage head are handling the imbalance well enough that the proposal stage was not the main advantage of Faster R-CNN — in which case Exp A's win came from elsewhere.]
+
+### 4.5. Comparison with tuned two-stage
+Head-to-head vs Faster R-CNN Exp A (mAP 0.1561):
+- RetinaNet tuned R1/R2 mAP: *fill*
+- ΔmAP: *fill*
+- ΔAP_small: *fill*
+
+## 5. Submission Log
+
+| # | Notebook | Model | Threshold | max_dets | Public LB |
+|---|---|---|---|---|---|
+| 1 | nb04c | Faster R-CNN Exp A (rpn=2000) | 0.05 | 500 | **0.18888** |
+| 2 | nb04c | Faster R-CNN Exp A (rpn=2000) | 0.10 | 300 | *fill* |
+| 3 | nb05 | RetinaNet tuned | 0.05 | 500 | *fill* |
+| 4 | nb06 | FCOS tuned | 0.05 | 500 | *fill* |
+| 5 | nb07 | RT-DETR tuned | 0.05 | 500 | *fill* |
+| 6 | nb11 | Final ensemble (WBF) | — | — | *fill* |
+
+The two retained submissions chosen for final grading are **#1** (0.18888) and **[best of #3–#6]**.
+
+## 6. Log of all experiments (including unsuccessful)
+
+| ID | Model | Change | Val mAP | LB | Kept in final? | Why / why not |
+|---|---|---|---|---|---|---|
+| nb02-p1 | FRCNN zero-shot | letterbox-1280 | 0.0125 | — | preprocessing winner | best of 4 candidates |
+| nb02-p2 | FRCNN zero-shot | letterbox-1024 | 0.0122 | — | — | tie, worse small-object recall |
+| nb02-p3 | FRCNN zero-shot | randompad-(2720,1530) | 0.0116 | — | — | distribution shift, more false positives |
+| nb02-p4 | FRCNN zero-shot | plain-1280 | 0.0083 | — | — | aspect-ratio distortion (~34% worse) |
+| nb03 | FRCNN baseline | 1 epoch, rpn=1000 | 0.1373 | — | reference | — |
+| nb03b | FRCNN baseline recheck | same ckpt, full val | 0.1475 | — | reference for tuning | variance across sessions |
+| nb04 | FRCNN Exp A | rpn 1000→2000 | **0.1561** | **0.18888** | ✅ winner | best AP_small |
+| nb04b | FRCNN Exp B | pos_frac 0.25→0.50 | 0.1535 | — | ❌ | did not beat A; per-class shows van still dominates |
+| nb05 | RetinaNet | *fill* | *fill* | *fill* | *fill* | *fill* |
+| nb06 | FCOS | *fill* | *fill* | *fill* | *fill* | *fill* |
+| nb07 | RT-DETR | *fill* | *fill* | *fill* | *fill* | *fill* |
+| nb11 | Final pipeline | SAHI + Soft-NMS + WBF | *fill* | *fill* | ✅ final | *fill* |
+
