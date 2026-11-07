@@ -259,3 +259,14 @@ To address the small-object failure, we converted the k-means anchor clusters fr
 
 ## 4.4. Does removing the proposal stage cause issues?
 Yes. Comparing R0 to the tuned two-stage Faster R-CNN Exp A (mAP 0.1561), the one-stage RetinaNet struggles significantly more. The lack of an RPN means there is no proposal filtering stage. In VisDrone, where the average frame has 66 objects and up to 342, the RetinaNet classification head must evaluate an immense number of negative anchors per image. Even with Focal Loss, this dense scene density leads to a higher rate of duplicate boxes and a lower overall precision. This directly motivates the use of **Soft-NMS** in our final pipeline to clean up these dense predictions.
+
+## 4.3. Tuning (R1): Data-Grounded Anchors
+To address the small-object failure, we converted the k-means anchor clusters from our EDA (§1.2) into letterbox-1280 coordinates. The 9 anchors ranged from `11.2×15.9` (small) to `158.6×104.5` (large) in the network space. We grouped these 9 anchors into 3 sizes per FPN level and warm-started R1 from the R0 checkpoint (keeping the backbone/FPN, but re-initializing the heads due to the new anchor shapes).
+
+| Model | Anchors | mAP | AP50 | AP_small | AP_large | GPU FPS |
+|---|---|---|---|---|---|---|
+| **R0** | COCO Default | 0.0410 | 0.0941 | 0.0148 | 0.1053 | 3.39 |
+| **R1** | VisDrone k-means | **0.1082** | **0.2592** | **0.0533** | **0.1976** | 3.28 |
+| *Δ vs R0* | — | *+0.0672* | *+0.1651* | *+0.0385* | *+0.0923* | — |
+
+**Insight:** The data-grounded anchors caused a massive 164% relative jump in mAP and a **3.6× improvement in AP_small**. This proves that the bottleneck for RetinaNet was not the one-stage architecture itself, but rather the mismatch between COCO's anchor grid and the physical size of VisDrone objects. By shifting the anchor sizes down (to match our k-means clusters), the network was finally able to assign positive labels to the 20–30px pedestrians that dominate the dataset. R1 (mAP 0.108) still trails the tuned Faster R-CNN (mAP 0.156), showing that while data-specific anchors help the one-stage head, the RPN's proposal filtering is still fundamentally stronger for dense aerial scenes.
