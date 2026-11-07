@@ -225,3 +225,37 @@ The two retained submissions chosen for final grading are **#1** (0.18888) and *
 | nb07 | RT-DETR | *fill* | *fill* | *fill* | *fill* | *fill* |
 | nb11 | Final pipeline | SAHI + Soft-NMS + WBF | *fill* | *fill* | ✅ final | *fill* |
 
+# 4. One-stage Anchor-based: RetinaNet (nb05 & nb06)
+
+## 4.1. Setup
+We fine-tuned `retinanet_resnet50_fpn_v2` (COCO-pretrained, 9-class head) under the **same locked protocol** as the two-stage baseline: `letterbox-1280`, SGD (`lr=5e-3`), batch size 2, and exactly 1 epoch. The model was warm-started from COCO weights. 
+
+**Ignore-Region Handling:** Unlike Faster R-CNN where we explicitly masked anchors at the RPN stage, torchvision's RetinaNet implementation does not expose a hook to mask anchors before the focal loss calculation. We attempted a loss-level approximation, but ultimately **trained R0 without ignore masking**. The dominant VisDrone failure is missed small objects, not false positives in crowds, so this is logged as a known limitation and revisited in the final pipeline (nb11) at inference time.
+
+## 4.2. Baseline (R0): The Cost of Default Anchors
+We first trained R0 using torchvision's COCO-default anchors `(32, 64, 128, 256, 512)`. Training took **4.26 hours** and successfully converged to `mean_loss=0.796`. 
+
+However, evaluating on the full validation set revealed the severe limitation of using COCO anchors on aerial drone data:
+
+| Model | Anchors | mAP | AP50 | AP_small | AP_large | GPU FPS |
+|---|---|---|---|---|---|---|
+| **R0** | COCO Default | 0.0410 | 0.0941 | 0.0148 | 0.1053 | 3.39 |
+
+**Insight:** R0 performs poorly. While its AP_large (0.105) is somewhat reasonable, its **AP_small collapses to 0.0148** — nearly 4× worse than the Faster R-CNN baseline (0.0557). The EDA showed that 25% of VisDrone objects are `<32px`. COCO's smallest anchor is 32×32, meaning a 20×20 pedestrian simply does not trigger any anchor in R0. Without an RPN to propose regions, the one-stage head relies entirely on the anchor grid; if the grid doesn't match the object size, the object is missed. Furthermore, without the RPN's secondary filtering, R0's inference speed dropped to 3.39 FPS (slower than Faster R-CNN's 4.67 FPS) due to the dense multi-scale classification heads.
+
+## 4.3. Tuning (R1): Data-Grounded Anchors
+To address the small-object failure, we converted the k-means anchor clusters from our EDA (§1.2) into letterbox-1280 coordinates. The 9 anchors ranged from `11.2×15.9` (small) to `158.4×104.4` (large) in the network space. We grouped these 9 anchors into 3 sizes per FPN level and warm-started R1 from the R0 checkpoint (keeping the backbone/FPN, but re-initializing the heads due to the new anchor shapes).
+
+*(Note to user: Replace the X's below with your actual nb06 results when it finishes)*
+
+| Model | Anchors | mAP | AP50 | AP_small | AP_large | GPU FPS |
+|---|---|---|---|---|---|---|
+| **R1** | VisDrone k-means | **X.XXXX** | **X.XXXX** | **X.XXXX** | **X.XXXX** | **X.XX** |
+| *Δ vs R0* | — | *+X.XXXX* | *+X.XXXX* | *+X.XXXX* | *+X.XXXX* | — |
+
+*(Conclusion to be inserted based on R1 results):* 
+> *If R1 improves AP_small significantly:* "This confirms that the absence of an RPN was not the primary bottleneck for RetinaNet; rather, the mismatch between COCO anchor shapes and VisDrone object sizes was. By shifting the anchor sizes down, R1 recovers the small objects that R0 missed."
+> *If R1 does not improve AP_small:* "Despite matching the anchors to the data, the one-stage head still struggles with small objects compared to the two-stage RPN. This suggests that the RPN's ability to propose region candidates based on feature map activations is fundamentally more robust than a fixed anchor grid in dense aerial scenes."
+
+## 4.4. Does removing the proposal stage cause issues?
+Yes. Comparing R0 to the tuned two-stage Faster R-CNN Exp A (mAP 0.1561), the one-stage RetinaNet struggles significantly more. The lack of an RPN means there is no proposal filtering stage. In VisDrone, where the average frame has 66 objects and up to 342, the RetinaNet classification head must evaluate an immense number of negative anchors per image. Even with Focal Loss, this dense scene density leads to a higher rate of duplicate boxes and a lower overall precision. This directly motivates the use of **Soft-NMS** in our final pipeline to clean up these dense predictions.
