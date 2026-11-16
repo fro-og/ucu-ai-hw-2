@@ -162,15 +162,15 @@ Same protocol, `fcos_resnet50_fpn` (32.1M params). Two runs:
 
 ### 5.1 Setup and budget rationale
 
-We fine-tuned `PekingU/rtdetr_r18vd` (COCO-pretrained, 20.1M params) under the same locked protocol (letterbox-1280, clip-level split, full-val COCO eval with `iscrowd=1`). The classification head was reinitialized for 8 VisDrone classes (`ignore_mismatched_sizes=True`).
+I fine-tuned `PekingU/rtdetr_r18vd` (COCO-pretrained, 20.1M params) under the same locked protocol (letterbox-1280, clip-level split, full-val COCO eval with `iscrowd=1`). The classification head was reinitialized for 8 VisDrone classes (`ignore_mismatched_sizes=True`).
 
-RT-DETR's full schedule is 50–72 epochs (~600K–870K steps at batch 2). Under the 12 h T4 limit we trained **600 steps — 5% of one epoch** — deliberately testing sample efficiency rather than convergence, which the rubric explicitly permits ("If the model has not converged within the budget, state this and explain what you observe").
+RT-DETR's full schedule is 50–72 epochs (~600K–870K steps at batch 2). Under the 12 h T4 limit I trained **600 steps — 5% of one epoch** — deliberately testing sample efficiency rather than convergence, which the rubric explicitly permits ("If the model has not converged within the budget, state this and explain what you observe").
 
 **Tuned parameters (rubric-required):**
 - **Separate learning rates:** backbone `1e-5`, transformer `1e-4` (10× ratio, per DETR best practice).
 - **Queries vs scene density:** default 300 queries are insufficient for VisDrone's average 66 objects/frame (peak 342), but increasing queries is pointless without training — left at 300.
 - **Denoising loss:** kept on (HF default DN-DETR-style); the wrapper exposes no direct toggle.
-- **LR schedule:** StepLR (step=300, γ=0.1). The second half ran at `1e-6`, which we now recognise was too aggressive for 600 steps.
+- **LR schedule:** StepLR (step=300, γ=0.1). The second half ran at `1e-6`, which I now recognise was too aggressive for 600 steps.
 
 ### 5.2 Results
 
@@ -211,7 +211,7 @@ The trade-off is training dynamics. Standard detectors assign anchors to GT via 
 
 Bipartite matching is fundamentally more sample-inefficient than RPN + IoU assignment: Faster R-CNN's fixed assignment yields meaningful learning from step 1. RT-DETR is ~3.8× faster at inference — its real architectural advantage — but that comes at a sample-efficiency cost unaffordable under the T4 budget. It is documented as a **required comparison**, not a candidate for the ensemble.
 
-**What we would do differently:** constant LR for 600 steps; freeze the backbone or use `1e-6`; evaluate zero-shot COCO "person"/"car" AP as a partial benchmark; add a P2 stride-4 head for small objects.
+**What I would do differently:** constant LR for 600 steps; freeze the backbone or use `1e-6`; evaluate zero-shot COCO "person"/"car" AP as a partial benchmark; add a P2 stride-4 head for small objects.
 
 ![Per-epoch validation mAP: RT-DETR versus the CNN detectors](images/curve_rtdetr_vs_cnn.png)
 ![Failure cases, RT-DETR](images/fail_rtdetr.png)
@@ -220,7 +220,7 @@ Bipartite matching is fundamentally more sample-inefficient than RPN + IoU assig
 
 ### 6.1 Stronger base model: YOLOv8l at imgsz=800
 
-All four required families plateau at mAP50 ≈ 0.32 and share the same small-object failure (AP_small 2–4× lower than AP_large). To push the leaderboard beyond Faster R-CNN (0.18888), we trained YOLOv8l at `imgsz=800` for 48 epochs; the session was interrupted at epoch 26, with `save_period=4` preserving all checkpoints.
+All four required families plateau at mAP50 ≈ 0.32 and share the same small-object failure (AP_small 2–4× lower than AP_large). To push the leaderboard beyond Faster R-CNN (0.18888), I trained YOLOv8l at `imgsz=800` for 48 epochs; the session was interrupted at epoch 26, with `save_period=4` preserving all checkpoints.
 
 `results.csv` revealed a **non-monotonic curve**: mAP50 peaked at **epoch 1 (0.40783)**, then dropped to 0.342 (ep4), 0.320 (ep8), 0.319 (ep12–16), 0.319 (ep19 local peak), 0.308 (ep24), 0.304 (ep25). This is a catastrophic-forgetting signature: VisDrone's noisy labels degrade COCO-pretrained features after the first epoch while training loss keeps decreasing.
 
@@ -336,11 +336,11 @@ Training runs are logged to public W&B projects under the account `suchok-pn-ukr
 
 All three projects are public. Each run logs training curves (loss components per step), configuration (hyperparameters, anchor settings, LR schedule), and validation prediction images with bounding boxes for the required models.
 
-We did not produce the feature-embedding, attention-map, or Grad-CAM visualisations described in the bonus section; the logged validation prediction images are the extent of our model-behaviour visualisation.
+I did not produce the feature-embedding, attention-map, or Grad-CAM visualisations described in the bonus section; the logged validation prediction images are the extent of our model-behaviour visualisation.
 
 ### 10.3 Custom architectural decisions
 
-Not attempted. We did not modify any backbone, neck, or head; all four required models and the final YOLO pipeline use the released architectures with pretrained weights. The anchor configuration change in §3 is a hyperparameter change, not an architectural one.
+Not attempted. I did not modify any backbone, neck, or head; all four required models and the final YOLO pipeline use the released architectures with pretrained weights. The anchor configuration change in §3 is a hyperparameter change, not an architectural one.
 
 ## 11. Limitations
 
