@@ -1,5 +1,5 @@
 ---
-title: Homework 1 -- Multiple Object Video Detection
+title: Homework 2 -- Multiple Object Video Detection
 author: Kateryna Suchok
 course: Artificial Intelligence · UCU
 date: 2026-11-16
