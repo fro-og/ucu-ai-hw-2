@@ -18,26 +18,33 @@ date: 2026-11-16
 
 ## Summary
 
-I detect 8 VisDrone classes in drone video using deep detectors. Data: 56 training clips (24,201 frames), 7 validation clips (2,846 frames), 3,811 hidden test frames. Metric: COCO mAP@[.5:.95]. Our best single model is **YOLOv8l epoch-1 at imgsz=800**, public LB **0.23619** (private 0.17211). Our final submission is **TTA + Weighted Boxes Fusion** on that checkpoint, public LB **0.26189** (private 0.19932). The largest gains over our best required-family model (Faster R-CNN, public 0.18888 / private 0.14323) came from inference strategy, not architecture. The public and private rankings agree, so the final choice is not a public-LB artefact. Several things that looked good on validation did not help on the leaderboard; we report these as they are.
+I detect 8 VisDrone classes in drone video using deep detectors. Data: 56 training clips (24,201 frames), 7 validation clips (2,846 frames), 3,811 hidden test frames. Metric: COCO mAP@[.5:.95]. Our best single model is **YOLOv8l epoch-1 at imgsz=800**, public LB **0.23619** (private 0.17211). Our final submission is **TTA + Weighted Boxes Fusion** on that checkpoint, public LB **0.26189** (private 0.19932). The largest gains over our best required-family model (Faster R-CNN, public 0.18888 / private 0.14323) came from inference strategy, not architecture. The public and private rankings agree, so the final choice is not a public-LB artefact. Several things that looked good on validation did not help on the leaderboard; I report these as they are.
 
 ## 1. Data Understanding and Preprocessing
 
 The VisDrone2019-VID benchmark requires detecting 8 classes in unlabelled drone footage. The training set contains 24,201 frames (1.61M annotations) across 56 clips; validation contains 2,846 frames (146K annotations) across 7 clips. Resolutions vary from 1344×756 to 3840×2160.
 
+![Sample frames from the VisDrone dataset showing varying scene densities and backgrounds](images/eda_frames.png)
+
 **Class imbalance.** `car` (35.2%) and `person` (24.3%) dominate; the rarest classes are `bus` (4.5%) and `truck` (5.8%). This biases models toward majority classes and directly explains the van↔truck confusion in §2.3 and the collapse of `bus` to near-zero AP in every detector. It motivated Focal Loss in RetinaNet and class-aware failure analysis throughout.
+
+![Class distribution in train set](images/eda_classes.png)
 
 **Object sizes.** Using COCO thresholds, 24.9% of objects are small (<32 px), 63.5% medium (32–96 px), 11.6% large (≥96 px). A 20×20 px pedestrian pooled to a 7×7 RoI becomes ~3×3 px of features. This informed the letterbox-1280 training resolution (§1.2), the k-means anchor configuration for RetinaNet (§3), and the inference-resolution experiments in §6.
 
+![Histogram of object sizes](images/eda_sizes.png)
+
 **Scene density.** Frames average 66.8 objects (max 342). Dense scenes cause standard NMS to suppress true neighbours; this motivated Soft-NMS consideration and the WBF fusion in the final pipeline (§6.2). For query-based models, peak density sets a lower bound of ~300 queries.
 
-**Clip variance.** Mean object side length ranges from 28 px to 156 px across sequences. Consecutive frames share >95% of instances, so we use a **clip-level split** (56 training clips, 7 validation clips) throughout — frame-level splitting would leak information and inflate validation.
+![Distribution of objects per frame](images/eda_density.png)
+
+**Clip variance.** Mean object side length ranges from 28 px to 156 px across sequences. Consecutive frames share >95% of instances, so I use a **clip-level split** (56 training clips, 7 validation clips) throughout — frame-level splitting would leak information and inflate validation.
+
+![Average object size per clip](images/clip_variance.png)
 
 **Anchor configuration (k-means).** Clustering GT widths/heights (k=9) produced anchors from 23.8×33.7 px to 336.4×221.7 px. These were converted to letterbox-1280 coordinates (11.2×15.9 to 158.6×104.5 in network space) and used to configure RetinaNet (§3), grounding the anchor set in the actual data rather than COCO defaults. Default COCO anchors reach IoU≥0.5 with only 75% of boxes; our k-means set reaches 98%.
 
-![Original frame with ground truth and ignored regions, next to the converted YOLO-format frame](images/eda_conversion.png)
-![Box sizes](images/eda_sizes.png)
-![Class distribution](images/eda_classes.png)
-![Objects per frame](images/eda_density.png)
+![K-Means anchor clusters overlaid on GT box sizes](images/eda_anchors.png)
 
 ### 1.2 Preprocessing ablation
 
@@ -50,18 +57,19 @@ Four resize strategies were compared with a zero-shot COCO-pretrained Faster R-C
 | randompad-(2720,1530) | 0.0116 |
 | plain-1280 | 0.0083 |
 
-`plain_resize` was ~34% worse: stretching a 3840×2160 aerial frame into a square distorts aspect ratios ~3×, destroying geometric features. `randompad` induced a distribution shift and downscaled large images before padding, losing small cues. Letterbox-1280 won and incurs no inference-speed penalty (0.197 vs 0.208 s/img). We also confirmed that evaluating with `iscrowd=0` rewards the wrong behaviour — strategies generating many boxes in crowds looked artificially good — so all subsequent evaluations use `iscrowd=1`, with detections inside crowd regions skipped.
+`plain_resize` was ~34% worse: stretching a 3840×2160 aerial frame into a square distorts aspect ratios ~3×, destroying geometric features. `randompad` induced a distribution shift and downscaled large images before padding, losing small cues. Letterbox-1280 won and incurs no inference-speed penalty (0.197 vs 0.208 s/img). I also confirmed that evaluating with `iscrowd=0` rewards the wrong behaviour — strategies generating many boxes in crowds looked artificially good — so all subsequent evaluations use `iscrowd=1`, with detections inside crowd regions skipped.
+
+![Visual comparison of letterbox vs plain resize](images/preproc_compare.png)
 
 **Annotation conversion and verification.** VisDrone annotations were converted to COCO format for evaluation and to YOLO format for the final pipeline. Non-target classes and ignored regions are encoded as `iscrowd=1`; detections inside them are not penalized. Conversion was verified by overlaying ground-truth boxes on sample frames before any training.
 
-![letterbox vs plain resize on a sample frame](images/preproc_compare.png)
-![ground-truth box overlay verification](images/gt_verify.png)
+![Verification of GT boxes (green) and ignored regions (blue)](images/gt_verify.png)
 
 ## 2. Two-stage Anchor-based: Faster R-CNN
 
 ### 2.1 Protocol
 
-We fine-tuned `fasterrcnn_resnet50_fpn_v2` (COCO-pretrained, 9-class head, 43.3M params) with SGD (lr=5e-3, momentum=0.9), StepLR, batch size 2, letterbox-1280, and clip-level splits. One epoch at 1280² takes ~3.2 h on a T4, so the fixed budget was exactly 1 epoch. Ignore regions were masked by labelling anchors overlapping crowds (IoU>0.3) as `-1` via a custom `IgnoreAwareAssigner` wrapping the RPN matcher — without this, the model learns to treat pedestrians in crowds as background. A single-batch smoke test produced total loss 3.41, dropping to mean 0.6861 after one epoch.
+I fine-tuned `fasterrcnn_resnet50_fpn_v2` (COCO-pretrained, 9-class head, 43.3M params) with SGD (lr=5e-3, momentum=0.9), StepLR, batch size 2, letterbox-1280, and clip-level splits. One epoch at 1280² takes ~3.2 h on a T4, so the fixed budget was exactly 1 epoch. Ignore regions were masked by labelling anchors overlapping crowds (IoU>0.3) as `-1` via a custom `IgnoreAwareAssigner` wrapping the RPN matcher — without this, the model learns to treat pedestrians in crowds as background. A single-batch smoke test produced total loss 3.41, dropping to mean 0.6861 after one epoch.
 
 ### 2.2 Results and tuning
 
@@ -96,7 +104,13 @@ The baseline checkpoint was re-evaluated in a fresh session to establish a consi
 
 **Failure 3 — Small-object recall lags.** Even tuned A has AP_small 0.0963 vs AP_large 0.2706 (2.8× gap; down from 4.5× at baseline but not closed). RoI pooling to 7×7 destroys 20–30 px objects; higher input resolution or slicing at inference are the candidate fixes.
 
-![Failure cases, Faster R-CNN](images/fail_frcnn.png)
+![Failure 1: Missed small person](images/fail_frcnn_1.png)
+![Failure 2: Duplicate in dense scene](images/fail_frcnn_2.png)
+![Failure 3: Misclassification](images/fail_frcnn_3.png)
+
+**Qualitative Check.** The 6-frame prediction grid confirms the metrics. On sparse highway scenes, the model confidently detects cars. In the dense basketball-court scene, the model over-predicts (~48 detections vs 52 GT), producing many overlapping duplicates.
+
+![Qualitative prediction grid](images/qualitative_frcnn.png)
 
 **Public LB: 0.18888 / Private: 0.14323** (Exp A, `score_thr=0.05, max_dets=500`, all 3,811 test frames non-empty).
 
@@ -117,7 +131,7 @@ Same locked protocol (letterbox-1280, SGD 5e-3, batch 2, 1 epoch, clip-level spl
 
 **R0 → R1.** R0's AP_small collapses to 0.0148 — COCO's smallest anchor is 32×32, so a 20-px pedestrian never triggers an anchor. Without an RPN, the one-stage head relies entirely on the anchor grid. Matching anchors to the data gave a **164% relative mAP jump and a 3.6× AP_small improvement** (+0.0672 mAP, +0.0385 AP_small). The bottleneck was anchor–data mismatch, not the architecture per se.
 
-**R2 (focal γ modification).** We planned a second experiment modifying the Focal Loss focusing parameter, but it was dropped due to the Kaggle T4 compute quota. The one-stage anchor family therefore has one tuning experiment beyond baseline (the anchor reconfiguration), not two. We report this as a limitation.
+**R2 (focal γ modification).** I planned a second experiment modifying the Focal Loss focusing parameter, but it was dropped due to the Kaggle T4 compute quota. The one-stage anchor family therefore has one tuning experiment beyond baseline (the anchor reconfiguration), not two. I report this as a limitation.
 
 ### 3.2 Does removing the proposal stage cause issues?
 
@@ -216,7 +230,7 @@ All four required families plateau at mAP50 ≈ 0.32 and share the same small-ob
 
 **Implication:** fine-tuning hurt the model. The epoch-1 checkpoint is the best base; remaining gains must come from **inference-time strategies**, which is exactly what this checkpoint rewards.
 
-![YOLO results.csv mAP50 curve showing epoch-1 peak and subsequent decay](images/yolo_curve.png)
+![YOLO training metrics showing epoch-1 peak and subsequent decay](images/yolo_curve.png)
 
 ### 6.2 Inference experiments
 
@@ -229,7 +243,9 @@ Four inference-time strategies were evaluated on top of the epoch-1 YOLOv8l chec
 | **C** | SAHI slicing | slice=640, overlap=0.2, on B | 0.31721 | not submitted | — | ✗ (val↓) |
 | **D** | **TTA + WBF (final)** | imgsz=800, conf=0.20, iou=0.45 + flip-TTA + WBF(iou=0.55) | — | **0.26189** | **0.19932** | ✅ **final** |
 
-**B — why the val gain did not transfer.** Raising inference resolution 640→1280 lifted val mAP50 from 0.324 → 0.412 (+27% relative), with broad per-class gains (bicycle +0.14, truck +0.13, person +0.11; only `bus` −0.03). But the public LB dropped to 0.21736. Three mechanisms: (i) Ultralytics `model.val()` resizes/pads differently than the test-CSV inference path, so the 300-frame subset is resolution-biased; (ii) higher resolution made the model overreact to background texture on test clips, hurting precision; (iii) the 300-frame random sample is not clip-stratified and does not represent test clip variance. **Validation mAP is not a reliable proxy for LB when inference resolution changes.** This was rejected in favour of the LB-best configuration.
+**B — why the val gain did not transfer.** Raising inference resolution 640→1280 lifted val mAP50 from 0.324 → 0.412 (+27% relative), with broad per-class gains (bicycle +0.14, truck +0.13, person +0.11; only `bus` −0.03). But the public LB dropped to 0.21736. Three mechanisms: (i) Ultralytics `model.val()` resizes/pads differently than the test-CSV inference path, so the 300-frame subset is resolution-biased; (ii) higher resolution made the model overreact to background texture on test clips, hurting precision; (iii) the test set contains low-resolution clips (680x382, 960x540) that do not exist in the training data (see figure below). **Validation mAP is not a reliable proxy for LB when inference resolution changes.** This was rejected in favour of the LB-best configuration.
+
+![Test image resolution distribution, showing low-resolution clips absent from the training set](images/test_resolution.png)
 
 **C — why SAHI underperformed.** SAHI (640×640 tiles, 20% overlap) on top of B dropped val mAP50 0.412 → 0.317 (−0.095) and cost 26 min for 300 frames (4–9× slower than B). Two mechanisms: (i) SAHI upscaled 640 tiles 2× to the model's `imgsz=1280`, so cropped-and-upscaled objects lose detail — the opposite of SAHI's intent; (ii) our implementation ran only the sliced pass, without the standard full-image ∪ sliced merge, so full-image context (large vehicles, road boundaries) was lost. SAHI is not a drop-in win; it requires matching tile size to training resolution and merging with full-image predictions, both skipped under time pressure.
 
